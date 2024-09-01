@@ -1,4 +1,6 @@
 class InputHandler {
+
+
     constructor(game) {
         this.game = game;
         window.addEventListener('keydown', (e) => {
@@ -13,5 +15,11 @@ class InputHandler {
                 this.game.ungrab();
             }
         });
+
+        window.addEventListener("touchstart", (e) => {this.game.grab();});
+        window.addEventListener("touchend", (e) => {this.game.ungrab();});
     }
+
+
+
 }
