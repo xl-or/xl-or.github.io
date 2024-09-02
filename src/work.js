@@ -240,7 +240,7 @@ class Work {
         if (this.machine.fail) {
             this.machine.fail = false;
             this.ui.fail_counter += 1;
-            if ((this.ui.fail_counter % 5) && (this.machine.speed > 1)) {
+            if ((this.ui.fail_counter % 5 == 0) && (this.machine.speed > 1)) {
                 this.ui.machine_speed -= 1;
                 this.machine.speed -= 1;
             }
