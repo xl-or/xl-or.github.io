@@ -16,9 +16,9 @@ class Worker {
         if (this.working != status) {
             this.working = status;
             if (this.working) {
-                this.image = document.getElementById('unworking_men');
-            } else {
                 this.image = document.getElementById('working_men');
+            } else {
+                this.image = document.getElementById('unworking_men');
             }
         }
     }
@@ -41,6 +41,10 @@ class Object {
         return this.x;
     }
 
+    set_img(img) {
+        this.image = img;
+    }
+
     draw(ctx) {
         ctx.drawImage(this.image, this.x, this.y);
     }
@@ -57,11 +61,10 @@ class Circle extends Object {
     }
 
 
-    update() {
+    update(dx) {
         if (this.grabed) return;
-        this.x += this.x_speed;
-        this.y += this.y_speed;
-        if (this.x > 1200) this.remove_flag = true;
+        this.x += dx;
+        this.y += dx * 0.04;
     }
 }
 
@@ -80,11 +83,86 @@ class Triangle extends Object {
     }
 
 
-    update() {
+    update(dx) {
         if (this.grabed) return;
-        this.x += this.x_speed;
-        this.y += this.y_speed;
-        if (this.x > 1200) this.remove_flag = true;
+        this.x += dx;
+        this.y += dx * 0.04;
+    }
+}
+
+
+
+
+class Machine {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.part_0 = new Object(x, y, document.getElementById('base_0'));   
+        this.part_1 = new Object(x + 176, y + 295, document.getElementById('base_1'));
+        this.objects = [];
+        this.alarm = false;
+        this.fail = false;
+        this.speed = 1;
+    }
+
+
+    reset_alarm(instance) {
+        if (!instance.alarm) return;
+        instance.part_0.set_img(document.getElementById('base_0'));
+        instance.alarm = false;
+    }
+
+    set_alarm() {
+        if (this.alarm) return;
+        this.alarm = true;
+        this.fail = true;
+        this.part_0.set_img(document.getElementById('base_0_alarm')); 
+        setTimeout(this.reset_alarm, 250, this);   
+    }
+
+
+    create_object() {
+        const random_value = Math.random();
+        if (random_value < 0.2) {
+             this.objects.push(new Circle(this.x, this.y + 415));
+        } else { 
+            this.objects.push(new Triangle(this.x, this.y + 415));
+        }
+    }
+
+
+    grab_object() {
+        for (let i = 0; i < this.objects.length; i++) {
+            if ((this.objects[i].x < (this.x + 576)) && (this.objects[i].x > (this.x + 376))) {
+                return this.objects[i];
+            }
+        }
+
+        return null;
+    }
+
+
+
+
+    update(dt) {
+        this.objects.forEach(obj => {
+            obj.update(this.speed * dt / 10);
+            if (obj.x > this.x + 876) {
+                obj.remove_flag = true;
+                if (obj instanceof Circle) {
+                    this.set_alarm();
+                }
+            }
+
+        });
+        this.objects = this.objects.filter(obj => !obj.remove_flag);
+    }
+
+
+    draw(ctx) {
+        this.part_1.draw(ctx);
+        this.objects.forEach(obj => obj.draw(ctx));
+        this.part_0.draw(ctx);
     }
 }
 
@@ -98,54 +176,46 @@ class Work {
         this.width = width;
         this.height = height;
         this.worker = new Worker(width/2, height/4);
-        this.base0 = new Object(324, -95, document.getElementById('base_0'));
-        this.base1 = new Object(500, 200, document.getElementById('base_1'));
+        this.machine = new Machine(324, -95);
         this.input = new InputHandler(this);
-        this.new_obj_period = 1000;
-        this.objects = [];
-        this.grabbed_obj = NaN;
+        this.ui = new UI(700, 45);
+        this.grabbed_obj = null;
         this.grab_status = false;
         this.empty_arm = true;
-    }
-
-
-    add_object() {
-        const random_value = Math.random();
-        if (random_value < 0.2) {
-             this.objects.push(new Circle(320, 320));
-        } else { 
-            this.objects.push(new Triangle(320, 320));
-        }
-
+        this.new_obj_period = 3000 / this.machine.speed;
     }
 
     grab() {
-        this.worker.set_working_status(true);
-        if (this.grab_status) return;
 
+        this.worker.set_working_status(false);
+        if (this.grab_status) return;
         this.grab_status = true;
 
-        for (let i = 0; i < this.objects.length; i++) {
-            if ((this.objects[i].x < 900) && (this.objects[i].x > 700)) {
+        this.grabbed_obj = this.machine.grab_object();
 
-                this.grabbed_obj = this.objects[i];
-                this.empty_arm = false;
-                break;
-            }
+        if (this.grabbed_obj == null) {
+            this.empty_arm = true;
+            return;
         }
 
-        if (this.empty_arm) return;
+        this.empty_arm = false;
+
+        if (this.grabbed_obj instanceof Circle) {
+            this.ui.save_counter += 1;
+            if (this.ui.save_counter % 5 == 0) {
+                this.ui.machine_speed += 1;
+                this.machine.speed += 1;
+            }
+        }
 
         this.grabbed_obj.grabed = true;
         this.grabbed_obj.x = 750;
         this.grabbed_obj.y = 150;
-
     }
 
 
     ungrab() {
-        this.worker.set_working_status(false);
-        console.log(this.grabbed_obj);
+        this.worker.set_working_status(true);
         if (!this.grab_status) return;
 
         this.grab_status = false;
@@ -159,29 +229,30 @@ class Work {
 
 
     update(dt) {
-
         this.new_obj_period -= dt;
         if (this.new_obj_period <= 0) {
-            this.add_object();
-            this.new_obj_period = 1000; 
+            this.machine.create_object();
+            this.new_obj_period = 3000 / this.machine.speed; 
         }
 
-        this.objects.forEach(obj => obj.update());
+        this.machine.update(dt);
 
-        this.objects = this.objects.filter(obj => !obj.remove_flag);
-
-
+        if (this.machine.fail) {
+            this.machine.fail = false;
+            this.ui.fail_counter += 1;
+            if ((this.ui.fail_counter % 5) && (this.machine.speed > 1)) {
+                this.ui.machine_speed -= 1;
+                this.machine.speed -= 1;
+            }
+        }
     }
 
 
 
     draw(ctx) {
         this.worker.draw(ctx);
-        this.base1.draw(ctx);
-
-        this.objects.forEach(obj => obj.draw(ctx));
-
-        this.base0.draw(ctx);
+        this.machine.draw(ctx);
+        this.ui.draw(ctx);
     }
 
 
